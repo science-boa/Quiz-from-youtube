@@ -117,32 +117,53 @@ if st.button("Generate Questions from Transcript", type="primary"):
             except Exception as e:
                 st.error(f"AI Generation Error: {e}")
 
-# --- LIVE REVIEW INTERFACE ---
+# --- EDITABLE LIVE REVIEW INTERFACE ---
 if 'quiz_data' in st.session_state:
-    st.header("Review & Select Questions")
+    st.header("Review, Edit & Select Questions")
+    st.write("You can directly click inside any box below to make custom edits before compiling the PDF.")
     
-    selected_indices = []
+    final_compiled_questions = []
     
     for i, q in enumerate(st.session_state['quiz_data']):
+        # Dynamically titles the preview pane based on your live edits
         with st.expander(f"Question {i+1}: {q['question'][:60]}...", expanded=True):
-            st.write(f"**Question:** {q['question']}")
-            for opt in q['options']:
-                st.write(opt)
-            st.write(f"**Correct Answer:** {q['correct_answer_letter']}")
-            st.write(f"**Explanation:** {q['explanation']}")
             
+            # 1. Editable Question Text Box
+            edited_question = st.text_input(f"Question {i+1} Text", value=q['question'], key=f"q_text_{i}")
+            
+            # 2. Editable Multiple Choice Options
+            edited_options = []
+            for opt_idx, option in enumerate(q['options']):
+                letter = chr(65 + opt_idx)  # A, B, C, D
+                edited_opt = st.text_input(f"Option {letter}", value=option, key=f"opt_{i}_{opt_idx}")
+                edited_options.append(edited_opt)
+            
+            # 3. Editable Answer Letter
+            edited_answer = st.text_input(f"Correct Answer Letter (A, B, C, or D)", value=q['correct_answer_letter'], key=f"ans_{i}").upper().strip()
+            
+            # 4. Editable Explanation Block
+            edited_explanation = st.text_area(f"Explanation", value=q['explanation'], key=f"exp_{i}", height=70)
+            
+            # Checkbox to completely exclude a question if needed
             keep_question = st.checkbox(f"Include Question {i+1} in PDF", value=True, key=f"keep_{i}")
+            
+            # If the checkbox remains ticked, build the newly updated question dictionary object
             if keep_question:
-                selected_indices.append(i)
+                final_compiled_questions.append({
+                    "question": edited_question,
+                    "options": edited_options,
+                    "correct_answer_letter": edited_answer,
+                    "explanation": edited_explanation
+                })
 
     # --- PDF GENERATION ---
-    st.divider()  # Parentheses added here to prevent the raw method string from showing!
-    selected_questions = [st.session_state['quiz_data'][i] for i in selected_indices]
+    st.divider()
     
-    if len(selected_questions) > 0:
-        pdf_bytes = generate_pdf(st.session_state['saved_url'], selected_questions)
+    if len(final_compiled_questions) > 0:
+        # Feeds the newly edited array into the PDF compiler
+        pdf_bytes = generate_pdf(st.session_state['saved_url'], final_compiled_questions)
         st.download_button(
-            label=f"💾 Download PDF ({len(selected_questions)} Questions)",
+            label=f"💾 Download PDF ({len(final_compiled_questions)} Questions)",
             data=pdf_bytes,
             file_name="youtube_quiz.pdf",
             mime="application/pdf",
