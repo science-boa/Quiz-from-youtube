@@ -36,7 +36,7 @@ url = st.text_input("Paste YouTube URL:")
 if url:
     # 1. API Call
     if st.button("Generate Questions"):
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-3.5-flash')
         prompt = f"""
 
         Analyze the YouTube URL: {url} and generate a 12-question multiple-choice quiz.
