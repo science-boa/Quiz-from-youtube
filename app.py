@@ -2,49 +2,29 @@ import streamlit as st
 import google.generativeai as genai
 from fpdf import FPDF
 import json
-import re
-from youtube_transcript_api import YouTubeTranscriptApi
 
-# --- CONFIGURATION & SETUP ---
+st.set_page_config(page_title="YouTube to Quiz Architect", layout="wide")
+st.title("YouTube to Quiz Architect 🛠️")
+st.write("Paste your video transcript text below to generate a perfectly formatted quiz without extraction errors.")
+
+# --- API KEY HANDLING ---
 if "GEMINI_API_KEY" in st.secrets:
-    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+    api_key = st.secrets["GEMINI_API_KEY"]
 else:
-    st.error("API Key missing! Please set GEMINI_API_KEY in your Streamlit Cloud Secrets.")
+    api_key = st.sidebar.text_input("Enter Gemini API Key:", type="password")
+
+if api_key:
+    genai.configure(api_key=api_key)
+else:
+    st.info("👉 Please ensure your Gemini API Key is set to activate the app.")
     st.stop()
 
-st.title("YouTube to Quiz Architect")
-st.write("Generate, review, and export custom video quizzes.")
+# --- INPUT FIELDS ---
+video_url = st.text_input("1. Reference YouTube URL (Will print at the top of the PDF):", placeholder="https://www.youtube.com/watch?v=...")
+transcript_text = st.text_area("2. Paste the Video Transcript / Content here:", height=300, placeholder="Paste your copied text transcript blocks here...")
 
-# --- HELPER FUNCTIONS ---
-def get_youtube_id(url):
-    """Extracts the 11-character video ID from a standard YouTube URL."""
-    match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11}).*", url)
-    return match.group(1) if match else None
-
-def get_video_transcript(video_id):
-    """Fetches the transcript text using the YouTube API with robust fallbacks."""
-    try:
-        # First attempt: Try standard English
-        transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'en-US', 'en-GB'])
-        full_text = " ".join([item['text'] for item in transcript_list])
-        return full_text
-        
-    except Exception:
-        # Second attempt: If standard English fails, find ANY available transcript
-        try:
-            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-            
-            # Grab the first available transcript (whether manual or auto-generated)
-            for transcript in transcript_list:
-                # Fetch it and translate it to English on the fly
-                translated_transcript = transcript.translate('en').fetch()
-                full_text = " ".join([item['text'] for item in translated_transcript])
-                return full_text
-                
-        except Exception as e:
-            return f"Error fetching fallback transcript: {e}"
-
-def generate_pdf(video_url, questions_list):
+# --- PDF COMPILER ---
+def generate_pdf(url_str, questions_list):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Courier", size=11)
@@ -53,8 +33,10 @@ def generate_pdf(video_url, questions_list):
         safe_text = text.encode('latin-1', 'replace').decode('latin-1')
         pdf.multi_cell(0, 5, txt=safe_text)
     
-    add_line(video_url)
+    # URL printed at the top
+    add_line(url_str if url_str else "No URL Provided")
     add_line("")
+    
     explanations = []
     
     for i, q in enumerate(questions_list):
@@ -72,73 +54,58 @@ def generate_pdf(video_url, questions_list):
     
     return pdf.output(dest='S').encode('latin-1')
 
-# --- MAIN APP LOGIC ---
-url = st.text_input("Paste YouTube URL here:")
-
-if st.button("Generate Questions"):
-    if not url:
-        st.warning("Please enter a URL first.")
+# --- BUTTON EVENT ---
+if st.button("Generate Questions from Transcript", type="primary"):
+    if not transcript_text:
+        st.warning("Please paste a transcript block before generating.")
     else:
-        video_id = get_youtube_id(url)
-        
-        if not video_id:
-            st.error("Could not find a valid YouTube Video ID in that URL.")
-        else:
-            with st.spinner("Fetching video transcript..."):
-                transcript = get_video_transcript(video_id)
+        with st.spinner("Gemini 3.5 Flash is building your 15 questions..."):
+            try:
+                model = genai.GenerativeModel('gemini-3.5-flash')
                 
-            if "Error fetching" in transcript:
-                st.error("Could not get transcript. Make sure the video has closed captions/subtitles enabled.")
-            else:
-                with st.spinner("Gemini 3.5 Flash is analyzing the content..."):
-                    try:
-                        model = genai.GenerativeModel('gemini-3.5-flash')
-                        
-                        # Note how the prompt now includes the actual TRANSCRIPT text
-                        prompt = f"""
-                        Analyze the following transcript from a YouTube video. 
-                        Generate exactly 15 multiple choice questions based on the core educational content.
-                        
-                        TRANSCRIPT:
-                        {transcript}
-                        
-                        You MUST return the result as a raw, valid JSON object following this exact structure:
-                        {{
-                          "questions": [
-                            {{
-                              "question": "The question text here?",
-                              "options": ["A. First option", "B. Second option", "C. Third option", "D. Fourth option"],
-                              "correct_answer_letter": "A",
-                              "explanation": "One clear sentence explaining why the answer is correct."
-                            }}
-                          ]
-                        }}
-                        """
-                        
-                        response = model.generate_content(
-                            prompt,
-                            generation_config=genai.GenerationConfig(
-                                response_mime_type="application/json",
-                            )
-                        )
-                        
-                        data = json.loads(response.text)
-                        st.session_state['quiz_data'] = data['questions']
-                        st.session_state['url'] = url
-                        st.success("Questions generated successfully! Review them below.")
-                        
-                    except Exception as e:
-                        st.error(f"An error occurred: {e}. Please try again.")
+                prompt = f"""
+                Analyze the following video text content.
+                Generate exactly 15 multiple choice questions based on the core educational content.
+                
+                CONTENT TEXT:
+                {transcript_text}
+                
+                You MUST return the result as a raw, valid JSON object following this exact structure:
+                {{
+                  "questions": [
+                    {{
+                      "question": "The question text here?",
+                      "options": ["A. First option", "B. Second option", "C. Third option", "D. Fourth option"],
+                      "correct_answer_letter": "A",
+                      "explanation": "One clear sentence explaining why the answer is correct."
+                    }}
+                  ]
+                }}
+                """
+                
+                response = model.generate_content(
+                    prompt,
+                    generation_config=genai.GenerationConfig(
+                        response_mime_type="application/json",
+                    )
+                )
+                
+                data = json.loads(response.text)
+                st.session_state['quiz_data'] = data['questions']
+                st.session_state['saved_url'] = video_url
+                st.success("🎉 Questions generated successfully! Review them below.")
+                
+            except Exception as e:
+                st.error(f"AI Generation Error: {e}")
 
-# --- LIVE REVIEW EDITOR ---
+# --- LIVE REVIEW INTERFACE ---
 if 'quiz_data' in st.session_state:
     st.header("Review & Select Questions")
-    st.write("Uncheck the box next to any question you want to remove from the final PDF.")
     
     selected_indices = []
     
     for i, q in enumerate(st.session_state['quiz_data']):
-        with st.expander(f"Question {i+1}: {q['question'][:50]}...", expanded=True):
+        with st.expander(f"Question {i+1}: {q['question'][:60]}...", expanded=True):
             st.write(f"**Question:** {q['question']}")
             for opt in q['options']:
                 st.write(opt)
@@ -154,9 +121,9 @@ if 'quiz_data' in st.session_state:
     selected_questions = [st.session_state['quiz_data'][i] for i in selected_indices]
     
     if len(selected_questions) > 0:
-        pdf_bytes = generate_pdf(st.session_state['url'], selected_questions)
+        pdf_bytes = generate_pdf(st.session_state['saved_url'], selected_questions)
         st.download_button(
-            label=f"Download PDF ({len(selected_questions)} Questions)",
+            label=f"💾 Download PDF ({len(selected_questions)} Questions)",
             data=pdf_bytes,
             file_name="youtube_quiz.pdf",
             mime="application/pdf",
