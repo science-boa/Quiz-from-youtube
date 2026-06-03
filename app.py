@@ -136,4 +136,4 @@ if 'quiz_data' in st.session_state:
                 selected_indices.append(i)
 
     # --- PDF GENERATION ---
-    st.divider
+    st.divider()
