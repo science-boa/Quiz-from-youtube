@@ -4,7 +4,7 @@ import google.generativeai as genai
 
 # --- CONFIGURATION ---
 # Replace with your actual Gemini API Key
-genai.configure(api_key="YOUR_GEMINI_API_KEY")
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
 # --- FUNCTIONS ---
 def generate_pdf(text_content):
