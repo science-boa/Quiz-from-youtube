@@ -3,8 +3,12 @@ from fpdf import FPDF
 import google.generativeai as genai
 
 # --- CONFIGURATION ---
-# Replace with your actual Gemini API Key
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+# Instead of hardcoding, tell Streamlit to look in its secure "secrets" vault
+if "GEMINI_API_KEY" in st.secrets:
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+else:
+    st.error("API Key not found! Please set GEMINI_API_KEY in Streamlit secrets.")
+    st.stop()
 
 # --- FUNCTIONS ---
 def generate_pdf(text_content):
