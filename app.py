@@ -22,14 +22,27 @@ def get_youtube_id(url):
     return match.group(1) if match else None
 
 def get_video_transcript(video_id):
-    """Fetches the transcript text using the YouTube API."""
+    """Fetches the transcript text using the YouTube API with robust fallbacks."""
     try:
-        transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
-        # Combine all the text blocks into one giant paragraph
+        # First attempt: Try standard English
+        transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=['en', 'en-US', 'en-GB'])
         full_text = " ".join([item['text'] for item in transcript_list])
         return full_text
-    except Exception as e:
-        return f"Error fetching transcript: {e}"
+        
+    except Exception:
+        # Second attempt: If standard English fails, find ANY available transcript
+        try:
+            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+            
+            # Grab the first available transcript (whether manual or auto-generated)
+            for transcript in transcript_list:
+                # Fetch it and translate it to English on the fly
+                translated_transcript = transcript.translate('en').fetch()
+                full_text = " ".join([item['text'] for item in translated_transcript])
+                return full_text
+                
+        except Exception as e:
+            return f"Error fetching fallback transcript: {e}"
 
 def generate_pdf(video_url, questions_list):
     pdf = FPDF()
