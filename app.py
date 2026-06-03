@@ -6,12 +6,6 @@ import json
 st.set_page_config(page_title="YouTube to Quiz Architect", layout="wide")
 st.title("YouTube to Quiz Architect 🛠️")
 
-# --- INSTRUCTIONS SECTION ---
-st.markdown("Open a [gemini chat window](https://gemini.google.com) and use the following instruction to generate a transcript:")
-st.code("Extract the complete caption/transcript text of this video and output it as a plain text block: [PASTE_YOUR_URL_HERE]")
-
-st.write("Paste your video transcript text below to generate a formatted quiz")
-
 # --- API KEY HANDLING ---
 if "GEMINI_API_KEY" in st.secrets:
     api_key = st.secrets["GEMINI_API_KEY"]
@@ -24,9 +18,29 @@ else:
     st.info("👉 Please ensure your Gemini API Key is set to activate the app.")
     st.stop()
 
-# --- INPUT FIELDS ---
-video_url = st.text_input("1. Reference YouTube URL (Will print at the top of the PDF):", placeholder="https://www.youtube.com/watch?v=...")
-transcript_text = st.text_area("2. Paste the Video Transcript / Content here:", height=300, placeholder="Paste your copied text transcript blocks here...")
+# --- STEP 1: VIDEO URL INPUT ---
+video_url = st.text_input("1. Paste YouTube URL here:", placeholder="https://www.youtube.com/watch?v=...")
+
+# --- STEP 2: DYNAMIC INSTRUCTIONS (Only shows after URL is filled) ---
+if video_url:
+    st.markdown("### Next Step: Get the Transcript")
+    st.markdown("Open a [gemini chat window](https://gemini.google.com) and use the following instruction to generate a transcript:")
+    
+    # Custom Gemini instruction requested by user
+    gemini_instruction = (
+        f"Extract the complete caption/transcript text of this video: {video_url}\n\n"
+        f"Format Requirements:\n"
+        f"1. Put a new line at the end of each sentence.\n"
+        f"2. Produce the entire final output inside a plain text code block so that it has a copy button."
+    )
+    
+    # st.code automatically creates a box with a "Copy" button on the top right
+    st.code(gemini_instruction, language="text")
+
+st.divider()
+
+# --- STEP 3: TRANSCRIPT INPUT & PROCESSING ---
+transcript_text = st.text_area("2. Paste your video transcript text below to generate a formatted quiz", height=300, placeholder="Paste your copied text transcript blocks here...")
 
 # --- PDF COMPILER ---
 def generate_pdf(url_str, questions_list):
@@ -122,17 +136,4 @@ if 'quiz_data' in st.session_state:
                 selected_indices.append(i)
 
     # --- PDF GENERATION ---
-    st.divider()
-    selected_questions = [st.session_state['quiz_data'][i] for i in selected_indices]
-    
-    if len(selected_questions) > 0:
-        pdf_bytes = generate_pdf(st.session_state['saved_url'], selected_questions)
-        st.download_button(
-            label=f"💾 Download PDF ({len(selected_questions)} Questions)",
-            data=pdf_bytes,
-            file_name="youtube_quiz.pdf",
-            mime="application/pdf",
-            type="primary"
-        )
-    else:
-        st.warning("You must select at least one question to generate a PDF.")
+    st.divider
