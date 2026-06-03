@@ -136,4 +136,17 @@ if 'quiz_data' in st.session_state:
                 selected_indices.append(i)
 
     # --- PDF GENERATION ---
-    st.divider()
+    st.divider()  # Parentheses added here to prevent the raw method string from showing!
+    selected_questions = [st.session_state['quiz_data'][i] for i in selected_indices]
+    
+    if len(selected_questions) > 0:
+        pdf_bytes = generate_pdf(st.session_state['saved_url'], selected_questions)
+        st.download_button(
+            label=f"💾 Download PDF ({len(selected_questions)} Questions)",
+            data=pdf_bytes,
+            file_name="youtube_quiz.pdf",
+            mime="application/pdf",
+            type="primary"
+        )
+    else:
+        st.warning("You must select at least one question to generate a PDF.")
