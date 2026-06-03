@@ -1,81 +1,140 @@
 import streamlit as st
-from fpdf import FPDF
 import google.generativeai as genai
+from fpdf import FPDF
+import json
 
-# --- CONFIGURATION ---
-# Instead of hardcoding, tell Streamlit to look in its secure "secrets" vault
+# --- CONFIGURATION & SETUP ---
+# Ensure your Streamlit Cloud Secrets has: GEMINI_API_KEY = "your_actual_key"
 if "GEMINI_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 else:
-    st.error("API Key not found! Please set GEMINI_API_KEY in Streamlit secrets.")
+    st.error("API Key missing! Please set GEMINI_API_KEY in your Streamlit Cloud Secrets.")
     st.stop()
 
+st.title("YouTube to Quiz Architect")
+st.write("Generate, review, and export custom video quizzes.")
+
 # --- FUNCTIONS ---
-def generate_pdf(text_content):
+def generate_pdf(video_url, questions_list):
     pdf = FPDF()
     pdf.add_page()
-    # Using Courier for strict monospaced alignment
     pdf.set_font("Courier", size=11)
     
-    # Clean the text: remove markdown code block markers if the AI accidentally adds them
-    clean_text = text_content.replace("```text", "").replace("```", "").strip()
+    # Helper to write lines and auto-wrap long text
+    def add_line(text):
+        # Encode to latin-1 to avoid fpdf character crashes
+        safe_text = text.encode('latin-1', 'replace').decode('latin-1')
+        pdf.multi_cell(0, 5, txt=safe_text)
     
-    # Force line breaks to ensure MS Forms parser reads the structure correctly
-    for line in clean_text.split('\n'):
-        # Encode to latin-1 to avoid character errors
-        encoded_line = line.encode('latin-1', 'replace').decode('latin-1')
-        pdf.cell(200, 5, txt=encoded_line, ln=True)
+    # 1. Output the URL at the top
+    add_line(video_url)
+    add_line("") # Blank line
+    
+    explanations = []
+    
+    # 2. Output the selected questions
+    for i, q in enumerate(questions_list):
+        add_line(f"{i+1}) {q['question']}")
+        
+        for option in q['options']:
+            add_line(option)
+            
+        add_line("")
+        add_line(f"Answer : {q['correct_answer_letter']}")
+        add_line("")
+        
+        # Store the explanation for the metadata block
+        explanations.append(q['explanation'])
+        
+    # 3. Output the final metadata block
+    add_line("Question: Metadata")
+    metadata_string = "**".join(explanations)
+    add_line(metadata_string)
     
     return pdf.output(dest='S').encode('latin-1')
 
-# --- UI LOGIC ---
-st.title("Quiz-to-PDF Architect")
+# --- MAIN APP LOGIC ---
+url = st.text_input("Paste YouTube URL here:")
 
-url = st.text_input("Paste YouTube URL:")
+if st.button("Generate Questions"):
+    if not url:
+        st.warning("Please enter a URL first.")
+    else:
+        with st.spinner("Gemini 3.5 Flash is analyzing the video..."):
+            try:
+                model = genai.GenerativeModel('gemini-3.5-flash')
+                
+                # By forcing JSON output, we guarantee the app can read the data to build the checkboxes
+                prompt = f"""
+                Analyze the content of this YouTube video: {url}
+                Generate exactly 15 multiple choice questions based on the core educational content.
+                
+                You MUST return the result as a raw, valid JSON object following this exact structure:
+                {{
+                  "questions": [
+                    {{
+                      "question": "The question text here?",
+                      "options": ["A. First option", "B. Second option", "C. Third option", "D. Fourth option"],
+                      "correct_answer_letter": "A",
+                      "explanation": "One clear sentence explaining why the answer is correct."
+                    }}
+                  ]
+                }}
+                """
+                
+                # Force structured JSON response
+                response = model.generate_content(
+                    prompt,
+                    generation_config=genai.GenerationConfig(
+                        response_mime_type="application/json",
+                    )
+                )
+                
+                # Parse the JSON and save to session state so it doesn't disappear when a checkbox is clicked
+                data = json.loads(response.text)
+                st.session_state['quiz_data'] = data['questions']
+                st.session_state['url'] = url
+                st.success("Questions generated successfully! Review them below.")
+                
+            except Exception as e:
+                st.error(f"An error occurred: {e}. Please try again.")
 
-if url:
-    # 1. API Call
-    if st.button("Generate Questions"):
-        model = genai.GenerativeModel('gemini-3.5-flash')
-        prompt = f"""
+# --- LIVE REVIEW EDITOR ---
+if 'quiz_data' in st.session_state:
+    st.header("Review & Select Questions")
+    st.write("Uncheck the box next to any question you want to remove from the final PDF.")
+    
+    selected_indices = []
+    
+    # Loop through the JSON data to build the UI
+    for i, q in enumerate(st.session_state['quiz_data']):
+        # Put each question in an expandable box to keep the UI clean
+        with st.expander(f"Question {i+1}: {q['question'][:50]}...", expanded=True):
+            st.write(f"**Question:** {q['question']}")
+            for opt in q['options']:
+                st.write(opt)
+            st.write(f"**Correct Answer:** {q['correct_answer_letter']}")
+            st.write(f"**Explanation:** {q['explanation']}")
+            
+            # The toggle switch
+            keep_question = st.checkbox(f"Include Question {i+1} in PDF", value=True, key=f"keep_{i}")
+            if keep_question:
+                selected_indices.append(i)
 
-        Analyze the YouTube URL: {url} and generate a 12-question multiple-choice quiz.
+    # --- PDF GENERATION ---
+    st.divider()
+    selected_questions = [st.session_state['quiz_data'][i] for i in selected_indices]
+    
+    if len(selected_questions) > 0:
+        pdf_bytes = generate_pdf(st.session_state['url'], selected_questions)
         
-        STRICT FORMATTING RULES:
-        1. First line: "Embed this video in the first section header: {url}"
-        2. THE 12 QUIZ QUESTIONS (QUESTIONS 1-12)
-            - Generate exactly 12 multiple-choice questions testing core concepts discussed in the video.
-            -  Format the question numbers with a period (e.g., "1. ", "2. ").
-            - Provide exactly 4 options labeled uppercase as "A.", "B.", "C.", "D.".
-            - Then add a single blank line.
-            - Then include the correct answer letter in the format: "Answer: B"
-            Do not use bolding or markdown 
-            - Separate each question block with exactly one blank line.
-        4. SECRET PROGRAMMATIC DESCRIPTION (QUESTION 13)
-            - Create a final question numbered "13. " with the exact title text: "Metadata".
-            - Directly underneath the title, map out an array containing the expanded pedagogical feedback string corresponding to every single question.
-            - Format each item exactly like this: [Q1-[correct_letter]|Tip:[Detailed, formal educational breakdown of why the answer is correct or the core science principle behind it]].
-            - Separate every bracketed item using a double-hash delimiter: "##" 
-            - Example: [Q1-b|Tip:Detailed explanation...]##[Q2-c|Tip:Detailed explanation...]
-        5. NO bullet points, NO tables, NO markdown formatting, NO conversational filler.
-        6. MANDATORY OUTPUT FORMATTING
-        - You must output the ENTIRE quiz (Steps 1, 2, and 3) inside a single, continuous Markdown code block (using ```text ... ```).
-        - Ensure the metadata in Question 13 remains a continuous raw text string block without any bullet points, numbers, or visual formatting.
-        """
-        response = model.generate_content(prompt)
-        st.session_state['quiz'] = response.text
-
-    # 2. Live Editor
-    if 'quiz' in st.session_state:
-        edited_quiz = st.text_area("Review/Edit Quiz:", st.session_state['quiz'], height=500)
-        
-        # 3. Render PDF
-        if st.button("Generate Import-Ready PDF"):
-            pdf_bytes = generate_pdf(edited_quiz)
-            st.download_button(
-                label="Download quiz_import.pdf",
-                data=pdf_bytes,
-                file_name="quiz_import.pdf",
-                mime="application/pdf"
-            )
-            st.success("PDF generated successfully!")
+        # Streamlit's native download button
+        st.download_button(
+            label=f"Download PDF ({len(selected_questions)} Questions)",
+            data=pdf_bytes,
+            file_name="youtube_quiz.pdf",
+            mime="application/pdf",
+            type="primary"
+        )
+    else:
+        st.warning("You must select at least one question to generate a PDF.")
