@@ -5,7 +5,12 @@ import json
 
 st.set_page_config(page_title="YouTube to Quiz Architect", layout="wide")
 st.title("YouTube to Quiz Architect 🛠️")
-st.write("Paste your video transcript text below to generate a perfectly formatted quiz without extraction errors.")
+
+# --- INSTRUCTIONS SECTION ---
+st.markdown("Open a [gemini chat window](https://gemini.google.com) and use the following instruction to generate a transcript:")
+st.code("Extract the complete caption/transcript text of this video and output it as a plain text block: [PASTE_YOUR_URL_HERE]")
+
+st.write("Paste your video transcript text below to generate a formatted quiz")
 
 # --- API KEY HANDLING ---
 if "GEMINI_API_KEY" in st.secrets:
