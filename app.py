@@ -54,6 +54,9 @@ def generate_pdf(url_str, questions_list):
     pdf.set_font("Courier", size=11)
     
     def add_line(text):
+        # Appends a paragraph mark (¶) to the end of any line containing text content
+        if text.strip():
+            text = f"{text} ¶"
         safe_text = text.encode('latin-1', 'replace').decode('latin-1')
         pdf.multi_cell(0, 5, txt=safe_text)
     
@@ -69,7 +72,7 @@ def generate_pdf(url_str, questions_list):
             add_line(option)
         add_line("")
         add_line(f"ANSWER: {q['Answer']}")
-        add_line(f"POINT: {q.get('points', 1)}")  # Updated format to match 'POINT: X' precisely
+        add_line(f"POINT: {q.get('points', 1)}")
         add_line("")
         explanations.append(q['explanation'])
         
