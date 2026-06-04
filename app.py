@@ -115,4 +115,65 @@ if st.button("Generate Questions from Transcript", type="primary"):
                 
                 data = json.loads(response.text)
                 st.session_state['quiz_data'] = data['questions']
-                st.session_state
+                st.session_state['saved_url'] = video_url
+                st.success("🎉 Questions generated successfully! Review them below.")
+                
+            except Exception as e:
+                st.error(f"AI Generation Error: {e}")
+
+# --- EDITABLE LIVE REVIEW INTERFACE ---
+if 'quiz_data' in st.session_state:
+    st.header("Review, Edit & Select Questions")
+    st.write("You can directly click inside any box below to make custom edits before compiling the Word Document.")
+    
+    final_compiled_questions = []
+    
+    for i, q in enumerate(st.session_state['quiz_data']):
+        with st.expander(f"Question {i+1}: {q['question'][:60]}...", expanded=True):
+            
+            # 1. Editable Question Text Box
+            edited_question = st.text_input(f"Question {i+1} Text", value=q['question'], key=f"q_text_{i}")
+            
+            # 2. Editable Multiple Choice Options
+            edited_options = []
+            for opt_idx, option in enumerate(q['options']):
+                letter = chr(65 + opt_idx)  # A, B, C, D
+                edited_opt = st.text_input(f"Option {letter}", value=option, key=f"opt_{i}_{opt_idx}")
+                edited_options.append(edited_opt)
+            
+            # 3. Editable Answer Letter
+            edited_answer = st.text_input(f"Correct Answer Letter (A, B, C, or D)", value=q['Answer'], key=f"ans_{i}").upper().strip()
+            
+            # 4. Editable Explanation Block
+            edited_explanation = st.text_area(f"Explanation", value=q['explanation'], key=f"exp_{i}", height=70)
+            
+            # 5. Point Value Tracker
+            default_points = q.get('points', 1)
+            edited_points = st.number_input(f"Points Allocation", value=int(default_points), min_value=0, key=f"pts_{i}")
+            
+            # Checkbox to completely exclude a question if needed
+            keep_question = st.checkbox(f"Include Question {i+1} in Word Doc", value=True, key=f"keep_{i}")
+            
+            if keep_question:
+                final_compiled_questions.append({
+                    "question": edited_question,
+                    "options": edited_options,
+                    "Answer": edited_answer,
+                    "explanation": edited_explanation,
+                    "points": edited_points
+                })
+
+    # --- DOCX GENERATION ---
+    st.divider()
+    
+    if len(final_compiled_questions) > 0:
+        docx_bytes = generate_docx(st.session_state['saved_url'], final_compiled_questions)
+        st.download_button(
+            label=f"💾 Download Word Doc ({len(final_compiled_questions)} Questions) for MS Forms",
+            data=docx_bytes,
+            file_name="quiz_for_forms.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            type="primary"
+        )
+    else:
+        st.warning("You must select at least one question to generate a Word Document.")
