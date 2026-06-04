@@ -63,7 +63,7 @@ def generate_pdf(url_str, questions_list):
         for option in q['options']:
             add_line(option)
         add_line("")
-        add_line(f"Answer : {q['correct_answer_letter']}")
+        add_line(f"Answer : {q['Answer']}")  # Updated to 'Answer'
         add_line("")
         explanations.append(q['explanation'])
         
@@ -96,8 +96,8 @@ if st.button("Generate Questions from Transcript", type="primary"):
                       "question": "The question text here?",
                       "options": ["A. First option", "B. Second option", "C. Third option", "D. Fourth option"],
                       "Answer": "A",
-                      "explanation": "One clear sentence explaining why the answer is correct."
-                      "Point: 1"
+                      "explanation": "One clear sentence explaining why the answer is correct.",
+                      "points": 1
                     }}
                   ]
                 }}
@@ -126,7 +126,6 @@ if 'quiz_data' in st.session_state:
     final_compiled_questions = []
     
     for i, q in enumerate(st.session_state['quiz_data']):
-        # Dynamically titles the preview pane based on your live edits
         with st.expander(f"Question {i+1}: {q['question'][:60]}...", expanded=True):
             
             # 1. Editable Question Text Box
@@ -139,36 +138,8 @@ if 'quiz_data' in st.session_state:
                 edited_opt = st.text_input(f"Option {letter}", value=option, key=f"opt_{i}_{opt_idx}")
                 edited_options.append(edited_opt)
             
-            # 3. Editable Answer Letter
-            edited_answer = st.text_input(f"Correct Answer Letter (A, B, C, or D)", value=q['correct_answer_letter'], key=f"ans_{i}").upper().strip()
+            # 3. Editable Answer Letter (Updated to 'Answer')
+            edited_answer = st.text_input(f"Correct Answer Letter (A, B, C, or D)", value=q['Answer'], key=f"ans_{i}").upper().strip()
             
             # 4. Editable Explanation Block
-            edited_explanation = st.text_area(f"Explanation", value=q['explanation'], key=f"exp_{i}", height=70)
-            
-            # Checkbox to completely exclude a question if needed
-            keep_question = st.checkbox(f"Include Question {i+1} in PDF", value=True, key=f"keep_{i}")
-            
-            # If the checkbox remains ticked, build the newly updated question dictionary object
-            if keep_question:
-                final_compiled_questions.append({
-                    "question": edited_question,
-                    "options": edited_options,
-                    "correct_answer_letter": edited_answer,
-                    "explanation": edited_explanation
-                })
-
-    # --- PDF GENERATION ---
-    st.divider()
-    
-    if len(final_compiled_questions) > 0:
-        # Feeds the newly edited array into the PDF compiler
-        pdf_bytes = generate_pdf(st.session_state['saved_url'], final_compiled_questions)
-        st.download_button(
-            label=f"💾 Download PDF ({len(final_compiled_questions)} Questions)",
-            data=pdf_bytes,
-            file_name="youtube_quiz.pdf",
-            mime="application/pdf",
-            type="primary"
-        )
-    else:
-        st.warning("You must select at least one question to generate a PDF.")
+            edited_explanation = st.text_area(f"Explanation", value=q['explanation'], key=f"exp_{i}", height=7
