@@ -95,8 +95,9 @@ if st.button("Generate Questions from Transcript", type="primary"):
                     {{
                       "question": "The question text here?",
                       "options": ["A. First option", "B. Second option", "C. Third option", "D. Fourth option"],
-                      "correct_answer_letter": "A",
+                      "Answer": "A",
                       "explanation": "One clear sentence explaining why the answer is correct."
+                      "Point: 1"
                     }}
                   ]
                 }}
