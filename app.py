@@ -44,7 +44,12 @@ transcript_text = st.text_area("2. Paste your video transcript text below to gen
 
 # --- PDF COMPILER ---
 def generate_pdf(url_str, questions_list):
-    pdf = FPDF()
+    # Dynamically calculate a tall canvas height to prevent pagination (approx 75mm per question block + metadata padding)
+    calculated_height = 150 + (len(questions_list) * 75)
+    
+    # Initialize FPDF with a custom size layout using the calculated height
+    pdf = FPDF(orientation='P', unit='mm', format=(210, calculated_height))
+    pdf.set_auto_page_break(False)  # CRITICAL: Forces everything onto a single continuous page
     pdf.add_page()
     pdf.set_font("Courier", size=11)
     
@@ -63,7 +68,7 @@ def generate_pdf(url_str, questions_list):
         for option in q['options']:
             add_line(option)
         add_line("")
-        add_line(f"Answer : {q['Answer']}")  # Updated to 'Answer'
+        add_line(f"ANSWER: {q['Answer']}")  # Updated format to match 'ANSWER: A' precisely
         add_line("")
         explanations.append(q['explanation'])
         
@@ -138,7 +143,7 @@ if 'quiz_data' in st.session_state:
                 edited_opt = st.text_input(f"Option {letter}", value=option, key=f"opt_{i}_{opt_idx}")
                 edited_options.append(edited_opt)
             
-            # 3. Editable Answer Letter (Updated to 'Answer')
+            # 3. Editable Answer Letter
             edited_answer = st.text_input(f"Correct Answer Letter (A, B, C, or D)", value=q['Answer'], key=f"ans_{i}").upper().strip()
             
             # 4. Editable Explanation Block
@@ -155,7 +160,7 @@ if 'quiz_data' in st.session_state:
                 final_compiled_questions.append({
                     "question": edited_question,
                     "options": edited_options,
-                    "Answer": edited_answer,  # Updated to 'Answer'
+                    "Answer": edited_answer,
                     "explanation": edited_explanation,
                     "points": edited_points
                 })
