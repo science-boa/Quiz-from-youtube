@@ -44,12 +44,12 @@ transcript_text = st.text_area("2. Paste your video transcript text below to gen
 
 # --- PDF COMPILER ---
 def generate_pdf(url_str, questions_list):
-    # Dynamically calculate a tall canvas height to prevent pagination (approx 75mm per question block + metadata padding)
-    calculated_height = 150 + (len(questions_list) * 75)
+    # Dynamically calculate a tall canvas height to prevent pagination (approx 80mm per question block + metadata padding)
+    calculated_height = 150 + (len(questions_list) * 80)
     
     # Initialize FPDF with a custom size layout using the calculated height
     pdf = FPDF(orientation='P', unit='mm', format=(210, calculated_height))
-    pdf.set_auto_page_break(False)  # CRITICAL: Forces everything onto a single continuous page
+    pdf.set_auto_page_break(False)  # Forces everything onto a single continuous page
     pdf.add_page()
     pdf.set_font("Courier", size=11)
     
@@ -68,7 +68,8 @@ def generate_pdf(url_str, questions_list):
         for option in q['options']:
             add_line(option)
         add_line("")
-        add_line(f"ANSWER: {q['Answer']}")  # Updated format to match 'ANSWER: A' precisely
+        add_line(f"ANSWER: {q['Answer']}")
+        add_line(f"POINTS: {q.get('points', 1)}")  # Added and formatted explicitly as 'POINTS: X'
         add_line("")
         explanations.append(q['explanation'])
         
