@@ -49,20 +49,22 @@ def generate_docx(url_str, questions_list):
     
     # Add URL as its own paragraph at the top
     doc.add_paragraph(url_str if url_str else "No URL Provided")
-    doc.add_paragraph("") # Structural paragraph gap
+    doc.add_paragraph("") # First blank line after section
+    doc.add_paragraph("") # Second blank line after section
 
     explanations = []
     
     for i, q in enumerate(questions_list):
-        # Every .add_paragraph() generates a genuine hard return/paragraph break
-        doc.add_paragraph(f"{i+1}) {q['question']}")
+        # Updated prefix layout format to '1.' instead of '1)'
+        doc.add_paragraph(f"{i+1}. {q['question']}")
         
         for option in q['options']:
             doc.add_paragraph(option)
         
         doc.add_paragraph(f"ANSWER: {q['Answer']}")
         doc.add_paragraph(f"POINT: {q.get('points', 1)}")
-        doc.add_paragraph("") # Structural paragraph gap between questions
+        doc.add_paragraph("") # First blank line between questions
+        doc.add_paragraph("") # Second blank line between questions
         
         explanations.append(q['explanation'])
         
@@ -82,7 +84,6 @@ if st.button("Generate Questions from Transcript", type="primary"):
     else:
         with st.spinner("Gemini 3.5 Flash is building your 15 questions..."):
             try:
-                # Restored directly to Gemini 3.5 Flash
                 model = genai.GenerativeModel('gemini-3.5-flash')
                 
                 prompt = f"""
