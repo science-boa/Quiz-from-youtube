@@ -142,4 +142,35 @@ if 'quiz_data' in st.session_state:
             edited_answer = st.text_input(f"Correct Answer Letter (A, B, C, or D)", value=q['Answer'], key=f"ans_{i}").upper().strip()
             
             # 4. Editable Explanation Block
-            edited_explanation = st.text_area(f"Explanation", value=q['explanation'], key=f"exp_{i}", height=7
+            edited_explanation = st.text_area(f"Explanation", value=q['explanation'], key=f"exp_{i}", height=70)
+            
+            # 5. Optional Point Value Tracker
+            default_points = q.get('points', 1)
+            edited_points = st.number_input(f"Points Allocation", value=int(default_points), min_value=0, key=f"pts_{i}")
+            
+            # Checkbox to completely exclude a question if needed
+            keep_question = st.checkbox(f"Include Question {i+1} in PDF", value=True, key=f"keep_{i}")
+            
+            if keep_question:
+                final_compiled_questions.append({
+                    "question": edited_question,
+                    "options": edited_options,
+                    "Answer": edited_answer,  # Updated to 'Answer'
+                    "explanation": edited_explanation,
+                    "points": edited_points
+                })
+
+    # --- PDF GENERATION ---
+    st.divider()
+    
+    if len(final_compiled_questions) > 0:
+        pdf_bytes = generate_pdf(st.session_state['saved_url'], final_compiled_questions)
+        st.download_button(
+            label=f"💾 Download PDF ({len(final_compiled_questions)} Questions)",
+            data=pdf_bytes,
+            file_name="youtube_quiz.pdf",
+            mime="application/pdf",
+            type="primary"
+        )
+    else:
+        st.warning("You must select at least one question to generate a PDF.")
