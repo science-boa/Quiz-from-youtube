@@ -2,3 +2,4 @@ streamlit
 fpdf
 google-generativeai
 youtube-transcript-api
+python-docx
