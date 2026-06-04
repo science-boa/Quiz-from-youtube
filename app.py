@@ -44,8 +44,8 @@ transcript_text = st.text_area("2. Paste your video transcript text below to gen
 
 # --- PDF COMPILER ---
 def generate_pdf(url_str, questions_list):
-    # Dynamically calculate a tall canvas height to prevent pagination (approx 80mm per question block + metadata padding)
-    calculated_height = 150 + (len(questions_list) * 80)
+    # Dynamically calculate a tall canvas height to accommodate the extra paragraph breaks comfortably
+    calculated_height = 200 + (len(questions_list) * 110)
     
     # Initialize FPDF with a custom size layout using the calculated height
     pdf = FPDF(orientation='P', unit='mm', format=(210, calculated_height))
@@ -54,15 +54,14 @@ def generate_pdf(url_str, questions_list):
     pdf.set_font("Courier", size=11)
     
     def add_line(text):
-        # Appends a paragraph mark (¶) to the end of any line containing text content
+        # If the line contains text, render it and automatically add a paragraph line break spacing after it
         if text.strip():
-            text = f"{text} ¶"
-        safe_text = text.encode('latin-1', 'replace').decode('latin-1')
-        pdf.multi_cell(0, 5, txt=safe_text)
+            safe_text = text.encode('latin-1', 'replace').decode('latin-1')
+            pdf.multi_cell(0, 5, txt=safe_text)
+            pdf.ln(5)  # This creates the physical paragraph break gap after the line
     
     # URL printed at the top
     add_line(url_str if url_str else "No URL Provided")
-    add_line("")
     
     explanations = []
     
@@ -70,10 +69,8 @@ def generate_pdf(url_str, questions_list):
         add_line(f"{i+1}) {q['question']}")
         for option in q['options']:
             add_line(option)
-        add_line("")
         add_line(f"ANSWER: {q['Answer']}")
         add_line(f"POINT: {q.get('points', 1)}")
-        add_line("")
         explanations.append(q['explanation'])
         
     add_line("Question: Metadata")
