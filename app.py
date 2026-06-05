@@ -41,157 +41,131 @@ if video_url:
 st.divider()
 
 # --- STEP 3: TRANSCRIPT INPUT & PROCESSING ---
-transcript_text = st.text_area("2. Paste your video transcript text below to generate a formatted quiz", height=300, placeholder="Paste your copied text transcript blocks here...")
+transcript_text = st.text_area("2. Paste your video transcript text below", height=300, placeholder="Paste your copied transcript here...")
 
-# --- AI GENERATION BUTTON LOGIC ---
+# --- AI GENERATION WITH FALLBACK LOGIC ---
 if st.button("Generate Questions from Transcript", type="primary"):
     if not transcript_text:
         st.warning("Please paste a transcript block before generating.")
     else:
-        with st.spinner("Gemini 3.5 Flash is compiling your comprehensive quiz configuration..."):
-            try:
-                model = genai.GenerativeModel('gemini-3.5-flash')
-                
-                prompt = f"""
-                Analyze the following video text content.
-                Generate a dynamic descriptive quiz title, exactly 15 multiple choice questions based on the core content, and exactly 1 open-ended conceptual long-answer question text with an evaluation rubric.
-                
-                CONTENT TEXT:
-                {transcript_text}
-                
-                You MUST return the result as a raw, valid JSON object following this exact structure:
-                {{
-                  "title": "Descriptive Topic Title Here",
-                  "questions": [
-                    {{
-                      "text": "The question text here?",
-                      "A": "First option text",
-                      "B": "Second option text",
-                      "C": "Third option text",
-                      "D": "Fourth option text",
-                      "answer": "A",
-                      "explanation": "One clear sentence explaining why the answer is correct.",
-                      "points": 5
-                    }}
-                  ],
-                  "long_answer": {{
-                    "text": "The comprehensive open-ended question text here?",
-                    "rubric": "Describe what parameters are explicitly required to earn full marks based on content boundaries.",
-                    "points": 6
-                  }}
-                }}
-                """
-                
-                response = model.generate_content(
-                    prompt,
-                    generation_config=genai.GenerationConfig(
-                        response_mime_type="application/json",
-                    )
-                )
-                
-                data = json.loads(response.text)
-                st.session_state['quiz_title'] = data.get('title', 'Video Assessment Quiz')
-                st.session_state['quiz_data'] = data['questions']
-                st.session_state['long_answer_data'] = data.get('long_answer', {
-                    "text": "Describe the main takeaway and execution principles covered in the video.",
-                    "rubric": "Full marks require addressing core functionality and architectural scope explicitly.",
-                    "points": 6
-                })
-                st.session_state['saved_url'] = video_url
-                st.session_state['saved_quiz_id'] = quiz_id_input
-                st.success("🎉 Assessment schema compiled successfully! Review parameters below.")
-                
-            except Exception as e:
-                st.error(f"AI Generation Error: {e}")
+        status_placeholder = st.empty()
+        
+        # Shared system configuration parameters for token efficiency
+        system_instruction = (
+            "You are a strict JSON generator for educational assessments. "
+            "Do not include any conversational text. Return ONLY valid JSON."
+        )
+        safe_transcript = transcript_text[:12000]
+        
+        prompt = f"""
+        Analyze this text: {safe_transcript}
 
-# --- EDITABLE LIVE REVIEW & STAGING INTERFACE ---
+        Generate a JSON object with:
+        1. "title": A descriptive title.
+        2. "questions": Exactly 15 multiple choice objects. Each must have:
+           "text", "A", "B", "C", "D", "answer" (letter), "explanation", and "points" (default 5).
+        3. "long_answer": Exactly 1 object with "text", "rubric" (detailed grading criteria), and "points" (default 6).
+
+        Strict JSON structure:
+        {{
+          "title": "...",
+          "questions": [{{ "text": "...", "A": "...", "B": "...", "C": "...", "D": "...", "answer": "A", "explanation": "...", "points": 5 }}],
+          "long_answer": {{ "text": "...", "rubric": "...", "points": 6 }}
+        }}
+        """
+        
+        generation_config = genai.GenerationConfig(
+            response_mime_type="application/json",
+            temperature=0.1
+        )
+        
+        compiled_data = None
+        model_used = ""
+
+        # --- RUNTIME ARCHITECTURE EXECUTION LOOP ---
+        with st.spinner("Quiz Architect is building your schema structure..."):
+            # Attempt 1: Gemini 3.5 Flash
+            try:
+                status_placeholder.info("🚀 Attempting compilation using **Gemini 3.5 Flash**...")
+                model_35 = genai.GenerativeModel(model_name='gemini-3.5-flash', system_instruction=system_instruction)
+                response = model_35.generate_content(prompt, generation_config=generation_config)
+                compiled_data = json.loads(response.text)
+                model_used = "Gemini 3.5 Flash"
+            
+            except Exception as error_35:
+                # Catch 3.5 errors (rate limits, context limits, network errors, etc.)
+                status_placeholder.warning(f"⚠️ Gemini 3.5 Flash encountered an error: {error_35}. Switching to fallback engine...")
+                
+                # Attempt 2: Fallback to Gemini 2.5 Flash
+                try:
+                    st.info("🔄 Re-routing payload to backup cluster via **Gemini 2.5 Flash**...")
+                    model_25 = genai.GenerativeModel(model_name='gemini-2.5-flash', system_instruction=system_instruction)
+                    response = model_25.generate_content(prompt, generation_config=generation_config)
+                    compiled_data = json.loads(response.text)
+                    model_used = "Gemini 2.5 Flash"
+                except Exception as error_25:
+                    status_placeholder.error(f"❌ Comprehensive failure: Both 3.5 and Fallback 2.5 chains returned errors. Message: {error_25}")
+
+        # Post-Processing if either pipeline succeeded
+        if compiled_data:
+            st.session_state['quiz_title'] = compiled_data.get('title', 'Video Assessment')
+            st.session_state['quiz_data'] = compiled_data['questions']
+            st.session_state['long_answer_data'] = compiled_data.get('long_answer')
+            st.session_state['saved_url'] = video_url
+            st.session_state['saved_quiz_id'] = quiz_id_input
+            status_placeholder.success(f"🎉 Assessment compiled successfully using **{model_used}**!")
+
+# --- EDITABLE REVIEW INTERFACE ---
 if 'quiz_data' in st.session_state:
-    st.header("Review, Edit & Select Questions")
-    st.write("Modify any field below to tweak parameters prior to generating the final configuration file.")
-    
-    st.subheader("Global Metadata Properties")
+    st.header("Review & Edit Questions")
     edited_title = st.text_input("Quiz Title", value=st.session_state.get('quiz_title', ''))
     
-    st.subheader("Multiple Choice Items Block")
+    st.subheader("Multiple Choice Questions")
     final_compiled_questions = []
     
     for i, q in enumerate(st.session_state['quiz_data']):
-        with st.expander(f"Question {i+1}: {q.get('text', '')[:60]}...", expanded=False):
+        with st.expander(f"Q{i+1}: {q.get('text', '')[:50]}...", expanded=False):
+            e_text = st.text_input(f"Question {i+1}", value=q.get('text', ''), key=f"q_{i}")
+            e_A = st.text_input(f"A", value=q.get('A', ''), key=f"A_{i}")
+            e_B = st.text_input(f"B", value=q.get('B', ''), key=f"B_{i}")
+            e_C = st.text_input(f"C", value=q.get('C', ''), key=f"C_{i}")
+            e_D = st.text_input(f"D", value=q.get('D', ''), key=f"D_{i}")
+            e_ans = st.text_input(f"Correct Answer (A-D)", value=q.get('answer', 'A'), key=f"ans_{i}").upper()
+            e_exp = st.text_area(f"Explanation", value=q.get('explanation', ''), key=f"exp_{i}")
+            e_pts = st.number_input(f"Points", value=int(q.get('points', 5)), key=f"pts_{i}")
             
-            # 1. Question Prompt
-            edited_text = st.text_input(f"Question {i+1} Text", value=q.get('text', ''), key=f"q_text_{i}")
-            
-            # 2. Options Ingestion
-            edited_A = st.text_input(f"Option A", value=q.get('A', ''), key=f"opt_A_{i}")
-            edited_B = st.text_input(f"Option B", value=q.get('B', ''), key=f"opt_B_{i}")
-            edited_C = st.text_input(f"Option C", value=q.get('C', ''), key=f"opt_C_{i}")
-            edited_D = st.text_input(f"Option D", value=q.get('D', ''), key=f"opt_D_{i}")
-            
-            # 3. Correct Answer Variable Block
-            edited_answer = st.text_input(f"Correct Answer Letter (A, B, C, or D)", value=q.get('answer', 'A'), key=f"ans_{i}").upper().strip()
-            
-            # 4. Inline Explanation Tracking
-            edited_explanation = st.text_area(f"Explanation Feedback", value=q.get('explanation', ''), key=f"exp_{i}", height=60)
-            
-            # 5. Question Point Metric
-            edited_points = st.number_input(f"Points Allocation", value=int(q.get('points', 5)), min_value=0, key=f"pts_{i}")
-            
-            keep_question = st.checkbox(f"Include Question {i+1} in YAML Configuration", value=True, key=f"keep_{i}")
-            
-            if keep_question:
+            if st.checkbox(f"Include Q{i+1}", value=True, key=f"keep_{i}"):
                 final_compiled_questions.append({
                     "question_num": len(final_compiled_questions) + 1,
-                    "text": edited_text,
-                    "A": edited_A,
-                    "B": edited_B,
-                    "C": edited_C,
-                    "D": edited_D,
-                    "answer": edited_answer,
-                    "points": edited_points,
-                    "explanation": edited_explanation
+                    "text": e_text, "A": e_A, "B": e_B, "C": e_C, "D": e_D,
+                    "answer": e_ans, "points": e_pts, "explanation": e_exp
                 })
 
-    # --- LONG ANSWER COMPONENT REVIEW ---
-    st.subheader("Long Answer Free Text Assignment")
-    la_payload = st.session_state.get('long_answer_data', {"text": "", "rubric": "", "points": 6})
+    st.subheader("Long Answer Question")
+    la = st.session_state.get('long_answer_data', {})
+    with st.expander("Edit Long Answer Task", expanded=True):
+        e_la_text = st.text_area("Question Text", value=la.get('text', ''), key="la_t")
+        e_la_rubric = st.text_area("Rubric", value=la.get('rubric', ''), key="la_r")
+        e_la_pts = st.number_input("Points", value=int(la.get('points', 6)), key="la_p")
     
-    with st.expander("Edit Long Answer Configuration Block", expanded=True):
-        edited_la_text = st.text_area("Long Answer Core Prompt", value=la_payload.get("text", ""), key="la_text_input")
-        edited_la_rubric = st.text_area("Evaluation Criteria Rubric", value=la_payload.get("rubric", ""), key="la_rubric_input", height=100)
-        edited_la_points = st.number_input("Maximum Mark Value", value=int(la_payload.get("points", 6)), min_value=0, key="la_points_input")
-        
-    final_la_compiled = {
-        "question_num": 1,
-        "text": edited_la_text,
-        "points": edited_la_points,
-        "rubric": edited_la_rubric
-    }
+    final_la = {"question_num": 1, "text": e_la_text, "points": e_la_pts, "rubric": e_la_rubric}
 
-    # --- YAML EXPORT AND EMISSION COMPILER ---
+    # --- YAML EXPORT ---
     st.divider()
+    quiz_id = st.session_state['saved_quiz_id']
     
-    # Try converting input safely into an integer key to stay clean with schema rules
-    try:
-        clean_quiz_id = int(st.session_state['saved_quiz_id'])
-    except ValueError:
-        clean_quiz_id = st.session_state['saved_quiz_id']
-
-    # Build sequential dictionary structure matching the project specifications
-    yaml_structure = {
-        "quiz_id": clean_quiz_id,
+    # Matches serialization schema: quiz_id, video_url, title, multiple_choice, long_answer
+    yaml_data = {
+        "quiz_id": int(quiz_id) if quiz_id.isdigit() else quiz_id,
         "video_url": st.session_state['saved_url'],
         "title": edited_title,
         "multiple_choice": final_compiled_questions,
-        "long_answer": final_la_compiled
+        "long_answer": final_la
     }
     
-    # Convert standard Python mapping natively to human-editable format block
-    yaml_string = yaml.dump(yaml_structure, allow_unicode=True, default_flow_style=False, sort_keys=False)
+    yaml_string = yaml.dump(yaml_data, allow_unicode=True, default_flow_style=False, sort_keys=False)
     
     st.download_button(
-        label=f"💾 Download QUIZ_{st.session_state['saved_quiz_id']}.yaml File",
+        label=f"💾 Download QUIZ_{quiz_id}.yaml",
         data=yaml_string,
-        file_name=f"QUIZ_{st.session_state['saved_quiz_id']}.yaml",
-        mime="text/yaml",
-        type="primary"
-    )
+        file_name
