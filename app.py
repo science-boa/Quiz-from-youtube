@@ -33,8 +33,11 @@ if video_url:
     gemini_instruction = (
         f"Extract the complete caption/transcript text of this video: {video_url}\n\n"
         f"Format Requirements:\n"
-        f"1. Put a new line at the end of each sentence.\n"
-        f"2. Produce the entire final output inside a plain text code block so that it has a copy button."
+        f"1. Strip out all casual conversational filler, greetings, sponsor segments, and channel plugs."
+        f"2. Collapse long analogies into direct, concise technical explanations."
+        f"3. Do not omit any specific facts, data, rules, definitions, or examples mentioned."
+        f"4. Put a new line at the end of each sentence.\n"
+        f"5. Produce the entire final output inside a plain text code block so that it has a copy button."
     )
     st.code(gemini_instruction, language="text")
 
