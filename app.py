@@ -168,4 +168,7 @@ if 'quiz_data' in st.session_state:
     st.download_button(
         label=f"💾 Download QUIZ_{quiz_id}.yaml",
         data=yaml_string,
-        file_name
+        file_name=f"QUIZ_{quiz_id}.yaml",
+        mime="text/yaml",
+        type="primary"
+    )
