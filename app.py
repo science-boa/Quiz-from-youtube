@@ -54,33 +54,41 @@ if st.button("Generate Questions from Transcript", type="primary"):
     else:
         status_placeholder = st.empty()
         
-        # METHOD 2 INTEGRATED: Upgraded system instructions giving the AI an expert academic persona
+        # METHOD 2 INTEGRATED: Shifted the AI's persona to an expert UK Secondary School Science Teacher / GCSE Examiner
         system_instruction = (
-            "You are an elite university professor and expert science curriculum architect. "
-            "Your task is to generate strict JSON educational assessments. Every explanation you write "
-            "must be pedagogically robust, focusing purely on deep scientific reasoning, root causes, "
-            "and conceptual mechanics. Never use lazy phrases like 'according to the text', 'the video states', "
-            "or 'as mentioned'. Do not include conversational filler outside the JSON."
+            "You are an expert UK secondary school science teacher and GCSE examiner. "
+            "Your task is to generate strict JSON educational assessments calibrated specifically "
+            "to the UK GCSE standard (suited for 14-15 year olds). Every explanation and rubric you write "
+            "must be pedagogically sound and aligned with GCSE curriculum expectations. Never use lazy phrases "
+            "like 'according to the text', 'the video states', or 'as mentioned'. Do not include "
+            "conversational filler outside the JSON."
         )
         safe_transcript = transcript_text[:12000]
         
-        # METHOD 1 INTEGRATED: Injected precise qualitative constraints directly into the schema property breakdown
+        # METHOD 1 INTEGRATED: Injected GCSE qualitative constraints and level-of-response rubric formatting
         prompt = f"""
         Analyze this text: {safe_transcript}
 
         Generate a JSON object with:
-        1. "title": A descriptive title.
-        2. "questions": Exactly 15 multiple choice objects. Each must have:
+        1. "title": A descriptive title suited for a GCSE Science Assessment.
+        2. "questions": Exactly 15 multiple choice objects appropriate for GCSE students. Each must have:
            "text", "A", "B", "C", "D", 
            "answer" (the exact full text string of the correct choice, matching either option A, B, C, or D perfectly), 
-           "explanation" (a conceptually deep scientific justification explaining the underlying first principles and mechanics of why this answer is factually true; do NOT just say 'the text states this' or repeat sentences verbatim, explain the scientific 'why'), 
+           "explanation" (a clear, curriculum-aligned scientific explanation of why the answer is factually correct, focusing on core concepts taught at the 14-15 year old level), 
            "points" (default 1).
-        3. "long_answer": Exactly 1 object with "text", "rubric" (detailed grading criteria), and "points" (default 6).
+        3. "long_answer": Exactly 1 object representing a classic GCSE 6-mark extended-response question. It must have:
+           "text" (A 6-mark question appropriate for a 14-15 year old GCSE student, focusing on key physical, chemical, or biological processes found in the transcript. Use prompt command terms like 'Explain', 'Describe', 'Evaluate', or 'Compare'),
+           "rubric" (A level-of-response grading rubric mimicking standard GCSE mark schemes. Structure it clearly into:
+               - Level 1 (1-2 marks): Simple statements or disjointed points.
+               - Level 2 (3-4 marks): Clear descriptions with some logical scientific linkages.
+               - Level 3 (5-6 marks): Detailed, structured, and logical scientific explanations with complete sequential steps.
+               - Indicative Content: A list of key factual bullet points the student should ideally include.),
+           "points" (default 6).
 
         Strict JSON structure:
         {{
           "title": "...",
-          "questions": [{{ "text": "...", "A": "...", "B": "...", "C": "...", "D": "...", "answer": "exact text of the correct option", "explanation": "robust scientific explanation of the mechanics", "points": 1 }}],
+          "questions": [{{ "text": "...", "A": "...", "B": "...", "C": "...", "D": "...", "answer": "exact text of the correct option", "explanation": "clear GCSE-level explanation", "points": 1 }}],
           "long_answer": {{ "text": "...", "rubric": "...", "points": 6 }}
         }}
         """
