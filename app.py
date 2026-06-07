@@ -10,7 +10,8 @@ st.title("YouTube to Quiz Architect 🛠️")
 if "GEMINI_API_KEY" in st.secrets:
     api_key = st.secrets["GEMINI_API_KEY"]
 else:
-    api_key = st.sidebar.text_input("Enter Gemini API Key:", type="password")
+    api_sidebar = st.sidebar.text_input("Enter Gemini API Key:", type="password")
+    api_key = api_sidebar if api_sidebar else None
 
 if api_key:
     genai.configure(api_key=api_key)
@@ -33,9 +34,9 @@ if video_url:
     gemini_instruction = (
         f"Extract the complete caption/transcript text of this video: {video_url}\n\n"
         f"Format Requirements:\n"
-        f"1. Strip out all casual conversational filler, greetings, sponsor segments, and channel plugs."
-        f"2. Collapse long analogies into direct, concise technical explanations."
-        f"3. Do not omit any specific facts, data, rules, definitions, or examples mentioned."
+        f"1. Strip out all casual conversational filler, greetings, sponsor segments, and channel plugs.\n"
+        f"2. Collapse long analogies into direct, concise technical explanations.\n"
+        f"3. Do not omit any specific facts, data, rules, definitions, or examples mentioned.\n"
         f"4. Put a new line at the end of each sentence.\n"
         f"5. Produce the entire final output inside a plain text code block so that it has a copy button."
     )
@@ -53,26 +54,33 @@ if st.button("Generate Questions from Transcript", type="primary"):
     else:
         status_placeholder = st.empty()
         
-        # Shared system configuration parameters for token efficiency
+        # METHOD 2 INTEGRATED: Upgraded system instructions giving the AI an expert academic persona
         system_instruction = (
-            "You are a strict JSON generator for educational assessments. "
-            "Do not include any conversational text. Return ONLY valid JSON."
+            "You are an elite university professor and expert science curriculum architect. "
+            "Your task is to generate strict JSON educational assessments. Every explanation you write "
+            "must be pedagogically robust, focusing purely on deep scientific reasoning, root causes, "
+            "and conceptual mechanics. Never use lazy phrases like 'according to the text', 'the video states', "
+            "or 'as mentioned'. Do not include conversational filler outside the JSON."
         )
         safe_transcript = transcript_text[:12000]
         
+        # METHOD 1 INTEGRATED: Injected precise qualitative constraints directly into the schema property breakdown
         prompt = f"""
         Analyze this text: {safe_transcript}
 
         Generate a JSON object with:
         1. "title": A descriptive title.
         2. "questions": Exactly 15 multiple choice objects. Each must have:
-           "text", "A", "B", "C", "D", "answer" (letter), "explanation", and "points" (default 5).
+           "text", "A", "B", "C", "D", 
+           "answer" (the exact full text string of the correct choice, matching either option A, B, C, or D perfectly), 
+           "explanation" (a conceptually deep scientific justification explaining the underlying first principles and mechanics of why this answer is factually true; do NOT just say 'the text states this' or repeat sentences verbatim, explain the scientific 'why'), 
+           "points" (default 1).
         3. "long_answer": Exactly 1 object with "text", "rubric" (detailed grading criteria), and "points" (default 6).
 
         Strict JSON structure:
         {{
           "title": "...",
-          "questions": [{{ "text": "...", "A": "...", "B": "...", "C": "...", "D": "...", "answer": "A", "explanation": "...", "points": 5 }}],
+          "questions": [{{ "text": "...", "A": "...", "B": "...", "C": "...", "D": "...", "answer": "exact text of the correct option", "explanation": "robust scientific explanation of the mechanics", "points": 1 }}],
           "long_answer": {{ "text": "...", "rubric": "...", "points": 6 }}
         }}
         """
@@ -96,7 +104,6 @@ if st.button("Generate Questions from Transcript", type="primary"):
                 model_used = "Gemini 3.5 Flash"
             
             except Exception as error_35:
-                # Catch 3.5 errors (rate limits, context limits, network errors, etc.)
                 status_placeholder.warning(f"⚠️ Gemini 3.5 Flash encountered an error: {error_35}. Switching to fallback engine...")
                 
                 # Attempt 2: Fallback to Gemini 2.5 Flash
@@ -133,9 +140,10 @@ if 'quiz_data' in st.session_state:
             e_B = st.text_input(f"B", value=q.get('B', ''), key=f"B_{i}")
             e_C = st.text_input(f"C", value=q.get('C', ''), key=f"C_{i}")
             e_D = st.text_input(f"D", value=q.get('D', ''), key=f"D_{i}")
-            e_ans = st.text_input(f"Correct Answer (A-D)", value=q.get('answer', 'A'), key=f"ans_{i}").upper()
+            
+            e_ans = st.text_input(f"Correct Answer Text", value=q.get('answer', ''), key=f"ans_{i}")
             e_exp = st.text_area(f"Explanation", value=q.get('explanation', ''), key=f"exp_{i}")
-            e_pts = st.number_input(f"Points", value=int(q.get('points', 5)), key=f"pts_{i}")
+            e_pts = st.number_input(f"Points", value=int(q.get('points', 1)), key=f"pts_{i}")
             
             if st.checkbox(f"Include Q{i+1}", value=True, key=f"keep_{i}"):
                 final_compiled_questions.append({
@@ -157,7 +165,6 @@ if 'quiz_data' in st.session_state:
     st.divider()
     quiz_id = st.session_state['saved_quiz_id']
     
-    # Matches serialization schema: quiz_id, video_url, title, multiple_choice, long_answer
     yaml_data = {
         "quiz_id": int(quiz_id) if quiz_id.isdigit() else quiz_id,
         "video_url": st.session_state['saved_url'],
