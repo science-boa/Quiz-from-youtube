@@ -2,20 +2,18 @@ import streamlit as st
 import google.generativeai as genai
 import yaml
 import json
-from github import Github
+from github import Github 
 
-# --- GITHUB INTEGRATION FUNCTION ---
+# --- GITHUB INTEGRATION ---
 def push_to_github(file_path, content, message, repo_name="science-boa/BOA-Quiz"):
     """Pushes content to a GitHub repository."""
     g = Github(st.secrets["GITHUB_TOKEN"])
     repo = g.get_repo(repo_name)
     try:
-        # Check if file exists to update it or create it
         contents = repo.get_contents(file_path)
         repo.update_file(contents.path, message, content, contents.sha)
         return True
     except:
-        # Create new file if it doesn't exist
         repo.create_file(file_path, message, content)
         return True
 
@@ -38,26 +36,10 @@ else:
 # --- STEP 1: CONTEXT PARAMS ---
 col1, col2 = st.columns([1, 3])
 with col1:
-    quiz_id_input = st.text_input("Quiz ID:", value="101", placeholder="e.g., 101")
+    quiz_id_input = st.text_input("Quiz ID:", value="101")
 with col2:
-    video_url = st.text_input("Paste YouTube URL here:", placeholder="https://www.youtube.com/watch?v=...")
+    video_url = st.text_input("Paste YouTube URL here:")
 
-# --- STEP 2: DYNAMIC INSTRUCTIONS ---
-if video_url:
-    st.markdown("### Next Step: Get the Transcript")
-    gemini_instruction = (
-        f"Extract the complete caption/transcript text of this video: {video_url}\n\n"
-        f"Format Requirements:\n1. Strip out all casual conversational filler.\n"
-        f"2. Collapse long analogies into concise technical explanations.\n"
-        f"3. Do not omit any specific facts, data, rules, definitions, or examples.\n"
-        f"4. New line at the end of each sentence.\n"
-        f"5. Plain text code block output."
-    )
-    st.code(gemini_instruction, language="text")
-
-st.divider()
-
-# --- STEP 3: TRANSCRIPT INPUT ---
 transcript_text = st.text_area("2. Paste your video transcript text below", height=300)
 
 # --- AI GENERATION ---
@@ -66,16 +48,17 @@ if st.button("Generate Questions from Transcript", type="primary"):
         st.warning("Please paste a transcript block.")
     else:
         status_placeholder = st.empty()
-        system_instruction = "You are an expert UK secondary school science teacher and GCSE examiner. Generate strict JSON."
+        system_instruction = "You are an expert UK science teacher. Generate strict JSON."
         safe_transcript = transcript_text[:12000]
         prompt = f"Analyze: {safe_transcript}. Generate JSON with 'title', 'questions' (15 items), 'long_answer'."
         
         generation_config = genai.GenerationConfig(response_mime_type="application/json", temperature=0.1)
         
-        with st.spinner("Quiz Architect is building your schema structure..."):
+        with st.spinner("Quiz Architect is building your schema..."):
             try:
-                status_placeholder.info("🚀 Sending to Gemini...")
-                model = genai.GenerativeModel(model_name='gemini-1.5-flash', system_instruction=system_instruction)
+                status_placeholder.info("🚀 Sending to Gemini (flash-lite)...")
+                # Updated model name as requested
+                model = genai.GenerativeModel(model_name='gemini-flash-lite-latest', system_instruction=system_instruction)
                 status_placeholder.info("⏳ Waiting for Gemini response...")
                 response = model.generate_content(prompt, generation_config=generation_config)
                 compiled_data = json.loads(response.text)
@@ -85,7 +68,7 @@ if st.button("Generate Questions from Transcript", type="primary"):
                 st.session_state['long_answer_data'] = compiled_data.get('long_answer')
                 st.session_state['saved_url'] = video_url
                 st.session_state['saved_quiz_id'] = quiz_id_input
-                status_placeholder.success("🎉 Assessment compiled!")
+                status_placeholder.success("🎉 Assessment compiled successfully!")
             except Exception as e:
                 status_placeholder.error(f"❌ Error: {e}")
 
@@ -99,7 +82,7 @@ if 'quiz_data' in st.session_state:
     
     for i, q in enumerate(st.session_state['quiz_data']):
         with st.expander(f"Q{i+1}: {q.get('text', '')[:50]}...", expanded=False):
-            e_text = st.text_input(f"Question {i+1}", value=q.get('text', ''), key=f"q_{i}")
+            e_text = st.text_input("Question", value=q.get('text', ''), key=f"q_{i}")
             e_A = st.text_input("A", value=q.get('A', ''), key=f"A_{i}")
             e_B = st.text_input("B", value=q.get('B', ''), key=f"B_{i}")
             e_C = st.text_input("C", value=q.get('C', ''), key=f"C_{i}")
@@ -123,12 +106,11 @@ if 'quiz_data' in st.session_state:
     
     final_la = {"question_num": 1, "text": e_la_text, "points": e_la_pts, "rubric": e_la_rubric}
 
-    # --- YAML EXPORT & GITHUB PUSH ---
+    # --- EXPORT & PUSH ---
     st.divider()
     quiz_id = st.session_state['saved_quiz_id']
     yaml_data = {
         "quiz_id": int(quiz_id) if str(quiz_id).isdigit() else quiz_id,
-        "video_url": st.session_state['saved_url'],
         "title": edited_title,
         "multiple_choice": final_compiled_questions,
         "long_answer": final_la
