@@ -49,12 +49,21 @@ if st.button("Generate Questions", type="primary"):
         system_instruction = "You are an expert UK science teacher. Generate strict JSON."
         prompt = f"Analyze: {transcript_text[:12000]}. Generate JSON with 'title', 'questions' (list of dicts), 'long_answer' (dict)."
         
+        # NOTE: Removed forcing application/json to see if the model provides more context on failure
+        generation_config = genai.GenerationConfig(temperature=0.1)
+        
         with st.spinner("Building schema..."):
             try:
-                model = genai.GenerativeModel(model_name='gemini-flash-lite-latest')
-                response = model.generate_content(prompt, generation_config={"response_mime_type": "application/json"})
+                # Updated to gemini-flash-latest
+                model = genai.GenerativeModel(model_name='gemini-flash-latest', system_instruction=system_instruction)
+                response = model.generate_content(prompt, generation_config=generation_config)
                 
-                # CRITICAL FIX: Ensure the output is parsed as a dict
+                # --- DEBUGGING BLOCK ---
+                st.write("--- DEBUG: API RESPONSE ---")
+                st.text(f"Finish Reason: {response.candidates[0].finish_reason}")
+                st.text(f"Raw Text snippet: {response.text[:200] if response.text else 'EMPTY'}")
+                
+                # Attempt to parse
                 compiled_data = json.loads(response.text)
                 
                 st.session_state['quiz_title'] = compiled_data.get('title', 'Video Assessment')
@@ -67,35 +76,17 @@ if st.button("Generate Questions", type="primary"):
                 st.error(f"Generation Error: {e}")
 
 # --- EDITABLE REVIEW INTERFACE ---
-# Check if quiz_data exists and is actually a list
 if 'quiz_data' in st.session_state:
-    # If for some reason it's a string, attempt to parse it again
-    if isinstance(st.session_state['quiz_data'], str):
-        try:
-            st.session_state['quiz_data'] = json.loads(st.session_state['quiz_data'])
-        except:
-            st.error("Data error: Quiz format is invalid.")
-            st.stop()
-
     st.header("Review & Edit Questions")
     
     final_compiled_questions = []
-    for i, q in enumerate(st.session_state['quiz_data']):
-        # Safety check: make sure q is a dict
+    # Safety: Ensure it's a list
+    data = st.session_state['quiz_data']
+    if isinstance(data, str): data = json.loads(data)
+    
+    for i, q in enumerate(data):
         if isinstance(q, dict):
             with st.expander(f"Q{i+1}: {q.get('text', 'No text')[:50]}...", expanded=False):
                 e_text = st.text_input("Question", value=q.get('text', ''), key=f"q_{i}")
                 e_A = st.text_input("A", value=q.get('A', ''), key=f"A_{i}")
                 e_B = st.text_input("B", value=q.get('B', ''), key=f"B_{i}")
-                e_C = st.text_input("C", value=q.get('C', ''), key=f"C_{i}")
-                e_D = st.text_input("D", value=q.get('D', ''), key=f"D_{i}")
-                e_ans = st.text_input("Correct Answer", value=q.get('answer', ''), key=f"ans_{i}")
-                e_exp = st.text_area("Explanation", value=q.get('explanation', ''), key=f"exp_{i}")
-                
-                if st.checkbox(f"Include Q{i+1}", value=True, key=f"keep_{i}"):
-                    final_compiled_questions.append({
-                        "text": e_text, "A": e_A, "B": e_B, "C": e_C, "D": e_D,
-                        "answer": e_ans, "explanation": e_exp, "points": 1
-                    })
-    
-    # ... [Keep your existing Long Answer and GitHub push logic here]
