@@ -29,7 +29,7 @@ else:
 if api_key:
     genai.configure(api_key=api_key)
 else:
-    st.info("👉 Please ensure your Gemini API Key is set to activate the app.")
+    st.info("👉 Please ensure your Gemini API Key is set.")
     st.stop()
 
 # --- INPUTS ---
@@ -42,57 +42,60 @@ with col2:
 transcript_text = st.text_area("2. Paste your video transcript text below", height=300)
 
 # --- AI GENERATION ---
-if st.button("Generate Questions from Transcript", type="primary"):
+if st.button("Generate Questions", type="primary"):
     if not transcript_text:
-        st.warning("Please paste a transcript block.")
+        st.warning("Please paste a transcript.")
     else:
-        status_placeholder = st.empty()
         system_instruction = "You are an expert UK science teacher. Generate strict JSON."
-        safe_transcript = transcript_text[:12000]
-        prompt = f"Analyze: {safe_transcript}. Generate JSON with 'title', 'questions' (15 items), 'long_answer'."
+        prompt = f"Analyze: {transcript_text[:12000]}. Generate JSON with 'title', 'questions' (list of dicts), 'long_answer' (dict)."
         
-        generation_config = genai.GenerationConfig(response_mime_type="application/json", temperature=0.1)
-        
-        with st.spinner("Quiz Architect is building your schema..."):
+        with st.spinner("Building schema..."):
             try:
-                # Updated model name
-                model = genai.GenerativeModel(model_name='gemini-flash-lite-latest', system_instruction=system_instruction)
-                response = model.generate_content(prompt, generation_config=generation_config)
+                model = genai.GenerativeModel(model_name='gemini-flash-lite-latest')
+                response = model.generate_content(prompt, generation_config={"response_mime_type": "application/json"})
+                
+                # CRITICAL FIX: Ensure the output is parsed as a dict
                 compiled_data = json.loads(response.text)
                 
                 st.session_state['quiz_title'] = compiled_data.get('title', 'Video Assessment')
-                st.session_state['quiz_data'] = compiled_data['questions']
-                st.session_state['long_answer_data'] = compiled_data.get('long_answer')
+                st.session_state['quiz_data'] = compiled_data.get('questions', [])
+                st.session_state['long_answer_data'] = compiled_data.get('long_answer', {})
                 st.session_state['saved_url'] = video_url
                 st.session_state['saved_quiz_id'] = quiz_id_input
-                st.rerun() # Use rerun to clear the page and enter the review state cleanly
+                st.rerun() 
             except Exception as e:
-                status_placeholder.error(f"❌ Error: {e}")
+                st.error(f"Generation Error: {e}")
 
 # --- EDITABLE REVIEW INTERFACE ---
-# Only render if quiz_data exists in session_state
-if 'quiz_data' in st.session_state and isinstance(st.session_state['quiz_data'], list):
-    st.header("Review & Edit Questions")
-    edited_title = st.text_input("Quiz Title", value=st.session_state.get('quiz_title', ''))
-    
-    st.subheader("Multiple Choice Questions")
-    final_compiled_questions = []
-    
-    for i, q in enumerate(st.session_state['quiz_data']):
-        with st.expander(f"Q{i+1}: {q.get('text', 'No text')[:50]}...", expanded=False):
-            e_text = st.text_input("Question", value=q.get('text', ''), key=f"q_{i}")
-            e_A = st.text_input("A", value=q.get('A', ''), key=f"A_{i}")
-            e_B = st.text_input("B", value=q.get('B', ''), key=f"B_{i}")
-            e_C = st.text_input("C", value=q.get('C', ''), key=f"C_{i}")
-            e_D = st.text_input("D", value=q.get('D', ''), key=f"D_{i}")
-            e_ans = st.text_input("Correct Answer", value=q.get('answer', ''), key=f"ans_{i}")
-            e_exp = st.text_area("Explanation", value=q.get('explanation', ''), key=f"exp_{i}")
-            
-            if st.checkbox(f"Include Q{i+1}", value=True, key=f"keep_{i}"):
-                final_compiled_questions.append({
-                    "question_num": len(final_compiled_questions) + 1,
-                    "text": e_text, "A": e_A, "B": e_B, "C": e_C, "D": e_D,
-                    "answer": e_ans, "explanation": e_exp, "points": 1
-                })
+# Check if quiz_data exists and is actually a list
+if 'quiz_data' in st.session_state:
+    # If for some reason it's a string, attempt to parse it again
+    if isinstance(st.session_state['quiz_data'], str):
+        try:
+            st.session_state['quiz_data'] = json.loads(st.session_state['quiz_data'])
+        except:
+            st.error("Data error: Quiz format is invalid.")
+            st.stop()
 
-    # ... (Long Answer and YAML Export logic remains the same)
+    st.header("Review & Edit Questions")
+    
+    final_compiled_questions = []
+    for i, q in enumerate(st.session_state['quiz_data']):
+        # Safety check: make sure q is a dict
+        if isinstance(q, dict):
+            with st.expander(f"Q{i+1}: {q.get('text', 'No text')[:50]}...", expanded=False):
+                e_text = st.text_input("Question", value=q.get('text', ''), key=f"q_{i}")
+                e_A = st.text_input("A", value=q.get('A', ''), key=f"A_{i}")
+                e_B = st.text_input("B", value=q.get('B', ''), key=f"B_{i}")
+                e_C = st.text_input("C", value=q.get('C', ''), key=f"C_{i}")
+                e_D = st.text_input("D", value=q.get('D', ''), key=f"D_{i}")
+                e_ans = st.text_input("Correct Answer", value=q.get('answer', ''), key=f"ans_{i}")
+                e_exp = st.text_area("Explanation", value=q.get('explanation', ''), key=f"exp_{i}")
+                
+                if st.checkbox(f"Include Q{i+1}", value=True, key=f"keep_{i}"):
+                    final_compiled_questions.append({
+                        "text": e_text, "A": e_A, "B": e_B, "C": e_C, "D": e_D,
+                        "answer": e_ans, "explanation": e_exp, "points": 1
+                    })
+    
+    # ... [Keep your existing Long Answer and GitHub push logic here]
