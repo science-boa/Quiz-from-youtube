@@ -2,6 +2,22 @@ import streamlit as st
 import google.generativeai as genai
 import yaml
 import json
+from github import Github 
+
+def push_to_github(file_path, content, message, repo_name="science-boa/BOA-Quiz"):
+    """Pushes content to a GitHub repository."""
+    # Ensure GITHUB_TOKEN is in your st.secrets
+    g = Github(st.secrets["GITHUB_TOKEN"])
+    repo = g.get_repo(repo_name)
+    try:
+        # Check if file exists to update it or create it
+        contents = repo.get_contents(file_path)
+        repo.update_file(contents.path, message, content, contents.sha)
+        return True
+    except:
+        # Create new file if it doesn't exist
+        repo.create_file(file_path, message, content)
+        return True
 
 st.set_page_config(page_title="YouTube to Quiz Architect", layout="wide")
 st.title("YouTube to Quiz Architect 🛠️")
@@ -190,3 +206,7 @@ if 'quiz_data' in st.session_state:
         mime="text/yaml",
         type="primary"
     )
+if st.button("Push to GitHub 🚀"):
+    file_name = f"quizzes/QUIZ_{quiz_id}.yaml"
+    if push_to_github(file_name, yaml_string, f"Add quiz {quiz_id}"):
+        st.success(f"Successfully pushed to GitHub as {file_name}!")
