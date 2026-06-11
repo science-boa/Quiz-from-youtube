@@ -2,7 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 import yaml
 import json
-from github import Github 
+from github import Github
 
 # --- GITHUB INTEGRATION FUNCTION ---
 def push_to_github(file_path, content, message, repo_name="science-boa/BOA-Quiz"):
@@ -10,11 +10,14 @@ def push_to_github(file_path, content, message, repo_name="science-boa/BOA-Quiz"
     g = Github(st.secrets["GITHUB_TOKEN"])
     repo = g.get_repo(repo_name)
     try:
+        # Check if file exists to update it or create it
         contents = repo.get_contents(file_path)
         repo.update_file(contents.path, message, content, contents.sha)
+        return True
     except:
+        # Create new file if it doesn't exist
         repo.create_file(file_path, message, content)
-    return True
+        return True
 
 st.set_page_config(page_title="YouTube to Quiz Architect", layout="wide")
 st.title("YouTube to Quiz Architect 🛠️")
@@ -32,69 +35,111 @@ else:
     st.info("👉 Please ensure your Gemini API Key is set to activate the app.")
     st.stop()
 
-# --- INPUTS ---
+# --- STEP 1: CONTEXT PARAMS ---
 col1, col2 = st.columns([1, 3])
 with col1:
-    quiz_id_input = st.text_input("Quiz ID:", value="101")
+    quiz_id_input = st.text_input("Quiz ID:", value="101", placeholder="e.g., 101")
 with col2:
-    video_url = st.text_input("Paste YouTube URL here:")
+    video_url = st.text_input("Paste YouTube URL here:", placeholder="https://www.youtube.com/watch?v=...")
 
-transcript_text = st.text_area("2. Paste your video transcript text below", height=200)
+# --- STEP 2: DYNAMIC INSTRUCTIONS ---
+if video_url:
+    st.markdown("### Next Step: Get the Transcript")
+    gemini_instruction = (
+        f"Extract the complete caption/transcript text of this video: {video_url}\n\n"
+        f"Format Requirements:\n1. Strip out all casual conversational filler.\n"
+        f"2. Collapse long analogies into concise technical explanations.\n"
+        f"3. Do not omit any specific facts, data, rules, definitions, or examples.\n"
+        f"4. New line at the end of each sentence.\n"
+        f"5. Plain text code block output."
+    )
+    st.code(gemini_instruction, language="text")
 
-# --- GENERATION LOGIC ---
+st.divider()
+
+# --- STEP 3: TRANSCRIPT INPUT ---
+transcript_text = st.text_area("2. Paste your video transcript text below", height=300)
+
+# --- AI GENERATION ---
 if st.button("Generate Questions from Transcript", type="primary"):
     if not transcript_text:
-        st.warning("Please paste a transcript.")
+        st.warning("Please paste a transcript block.")
     else:
-        status = st.empty()
-        
+        status_placeholder = st.empty()
         system_instruction = "You are an expert UK secondary school science teacher and GCSE examiner. Generate strict JSON."
-        prompt = f"Analyze this text: {transcript_text[:12000]}. Generate a JSON object with 'title', 'questions' (15 items), and 'long_answer'."
+        safe_transcript = transcript_text[:12000]
+        prompt = f"Analyze: {safe_transcript}. Generate JSON with 'title', 'questions' (15 items), 'long_answer'."
         
         generation_config = genai.GenerationConfig(response_mime_type="application/json", temperature=0.1)
         
-        compiled_data = None
-        
-        # Execution Loop
-        status.info("📤 Sending transcript to Gemini...")
-        try:
-            model = genai.GenerativeModel(model_name='gemini-3.5-flash', system_instruction=system_instruction)
-            status.info("⏳ Waiting for Gemini response...")
-            response = model.generate_content(prompt, generation_config=generation_config)
-            compiled_data = json.loads(response.text)
-            status.success("✅ AI generation complete.")
-            
-            st.session_state['quiz_data'] = compiled_data['questions']
-            st.session_state['long_answer_data'] = compiled_data.get('long_answer')
-            st.session_state['quiz_title'] = compiled_data.get('title')
-            st.session_state['saved_url'] = video_url
-            st.session_state['saved_quiz_id'] = quiz_id_input
-        except Exception as e:
-            status.error(f"Error during AI generation: {e}")
+        with st.spinner("Quiz Architect is building your schema structure..."):
+            try:
+                status_placeholder.info("🚀 Sending to Gemini...")
+                model = genai.GenerativeModel(model_name='gemini-1.5-flash', system_instruction=system_instruction)
+                status_placeholder.info("⏳ Waiting for Gemini response...")
+                response = model.generate_content(prompt, generation_config=generation_config)
+                compiled_data = json.loads(response.text)
+                
+                st.session_state['quiz_title'] = compiled_data.get('title', 'Video Assessment')
+                st.session_state['quiz_data'] = compiled_data['questions']
+                st.session_state['long_answer_data'] = compiled_data.get('long_answer')
+                st.session_state['saved_url'] = video_url
+                st.session_state['saved_quiz_id'] = quiz_id_input
+                status_placeholder.success("🎉 Assessment compiled!")
+            except Exception as e:
+                status_placeholder.error(f"❌ Error: {e}")
 
-# --- REVIEW & PUSH INTERFACE ---
+# --- EDITABLE REVIEW INTERFACE ---
 if 'quiz_data' in st.session_state:
-    st.header("Review & Edit")
-    # (Edit logic remains the same)
+    st.header("Review & Edit Questions")
     edited_title = st.text_input("Quiz Title", value=st.session_state.get('quiz_title', ''))
     
-    # ... [Rest of your review code: Loop for questions, long answer editor, etc.] ...
-
-    st.divider()
-    quiz_id = st.session_state.get('saved_quiz_id', '101')
-    yaml_data = {
-        "quiz_id": quiz_id,
-        "title": edited_title,
-        "multiple_choice": st.session_state['quiz_data'],
-        "long_answer": st.session_state['long_answer_data']
-    }
-    yaml_string = yaml.dump(yaml_data)
+    st.subheader("Multiple Choice Questions")
+    final_compiled_questions = []
     
+    for i, q in enumerate(st.session_state['quiz_data']):
+        with st.expander(f"Q{i+1}: {q.get('text', '')[:50]}...", expanded=False):
+            e_text = st.text_input(f"Question {i+1}", value=q.get('text', ''), key=f"q_{i}")
+            e_A = st.text_input("A", value=q.get('A', ''), key=f"A_{i}")
+            e_B = st.text_input("B", value=q.get('B', ''), key=f"B_{i}")
+            e_C = st.text_input("C", value=q.get('C', ''), key=f"C_{i}")
+            e_D = st.text_input("D", value=q.get('D', ''), key=f"D_{i}")
+            e_ans = st.text_input("Correct Answer", value=q.get('answer', ''), key=f"ans_{i}")
+            e_exp = st.text_area("Explanation", value=q.get('explanation', ''), key=f"exp_{i}")
+            
+            if st.checkbox(f"Include Q{i+1}", value=True, key=f"keep_{i}"):
+                final_compiled_questions.append({
+                    "question_num": len(final_compiled_questions) + 1,
+                    "text": e_text, "A": e_A, "B": e_B, "C": e_C, "D": e_D,
+                    "answer": e_ans, "explanation": e_exp, "points": 1
+                })
+
+    st.subheader("Long Answer Question")
+    la = st.session_state.get('long_answer_data', {})
+    with st.expander("Edit Long Answer Task", expanded=True):
+        e_la_text = st.text_area("Question Text", value=la.get('text', ''), key="la_t")
+        e_la_rubric = st.text_area("Rubric", value=la.get('rubric', ''), key="la_r")
+        e_la_pts = st.number_input("Points", value=int(la.get('points', 6)), key="la_p")
+    
+    final_la = {"question_num": 1, "text": e_la_text, "points": e_la_pts, "rubric": e_la_rubric}
+
+    # --- YAML EXPORT & GITHUB PUSH ---
+    st.divider()
+    quiz_id = st.session_state['saved_quiz_id']
+    yaml_data = {
+        "quiz_id": int(quiz_id) if str(quiz_id).isdigit() else quiz_id,
+        "video_url": st.session_state['saved_url'],
+        "title": edited_title,
+        "multiple_choice": final_compiled_questions,
+        "long_answer": final_la
+    }
+    
+    yaml_string = yaml.dump(yaml_data, allow_unicode=True, default_flow_style=False, sort_keys=False)
+    
+    st.download_button("💾 Download YAML", data=yaml_string, file_name=f"QUIZ_{quiz_id}.yaml", mime="text/yaml")
+
     if st.button("Push to GitHub 🚀"):
-        github_status = st.empty()
-        github_status.info(f"📤 Pushing QUIZ_{quiz_id}.yaml to GitHub (science-boa/BOA-Quiz)...")
-        try:
-            push_to_github(f"quizzes/QUIZ_{quiz_id}.yaml", yaml_string, f"Add quiz {quiz_id}")
-            github_status.success("✅ Successfully pushed to GitHub!")
-        except Exception as e:
-            github_status.error(f"❌ Failed to push to GitHub: {e}")
+        with st.spinner("⏳ Waiting for GitHub..."):
+            file_name = f"quizzes/QUIZ_{quiz_id}.yaml"
+            if push_to_github(file_name, yaml_string, f"Add quiz {quiz_id}"):
+                st.success(f"Successfully pushed to GitHub as {file_name}!")
