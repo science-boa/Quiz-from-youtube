@@ -58,14 +58,13 @@ if st.button("Generate Questions from Transcript", type="primary"):
     if not transcript_text:
         st.warning("Please paste a transcript.")
     else:
-        status_placeholder = st.empty()
         system_instruction = "You are an expert UK secondary school science teacher and GCSE examiner. Output ONLY valid, raw JSON. Do not include markdown code blocks or conversational filler."
         prompt = f"""
         Analyze this text: {transcript_text[:12000]}.
         Generate a JSON object with:
         1. "title": GCSE Science Assessment title.
-        2. "questions": Exactly 15 multiple choice objects (keys: text, A, B, C, D, answer, explanation, points).
-        3. "long_answer": 1 object (keys: text, rubric, points).
+        2. "questions": Exactly 15 multiple choice objects (keys: question_num, text, A, B, C, D, answer, points, explanation).
+        3. "long_answer": 1 object (keys: text, rubric).
         """
         
         with st.spinner("Building schema..."):
@@ -107,8 +106,9 @@ if 'quiz_data' in st.session_state:
             
             if st.checkbox(f"Include Q{i+1}", value=True, key=f"keep_{i}"):
                 final_compiled_questions.append({
+                    "question_num": len(final_compiled_questions) + 1,
                     "text": e_text, "A": e_A, "B": e_B, "C": e_C, "D": e_D,
-                    "answer": e_ans, "explanation": e_exp, "points": 1
+                    "answer": e_ans, "points": 1, "explanation": e_exp
                 })
     
     # Long Answer Section
@@ -121,9 +121,10 @@ if 'quiz_data' in st.session_state:
     quiz_id = st.session_state['saved_quiz_id']
     yaml_data = {
         "quiz_id": quiz_id,
+        "video_url": st.session_state.get('saved_url', ''),
         "title": edited_title,
         "multiple_choice": final_compiled_questions,
-        "long_answer": {"text": e_la_text, "rubric": e_la_rubric, "points": 6}
+        "long_answer": {"text": e_la_text, "rubric": e_la_rubric}
     }
     yaml_string = yaml.dump(yaml_data, allow_unicode=True, default_flow_style=False)
     
