@@ -61,10 +61,29 @@ if st.button("Generate Questions from Transcript", type="primary"):
         system_instruction = "You are an expert UK secondary school science teacher and GCSE examiner. Output ONLY valid, raw JSON. Do not include markdown code blocks or conversational filler."
         prompt = f"""
         Analyze this text: {transcript_text[:12000]}.
-        Generate a JSON object with:
-        1. "title": GCSE Science Assessment title.
-        2. "questions": Exactly 15 multiple choice objects (keys: question_num, text, A, B, C, D, answer, points, explanation).
-        3. "long_answer": 1 object (keys: text, rubric).
+       Generate a JSON object with:
+        1. "title": A descriptive title suited for a GCSE Science Assessment.
+        2. "questions": Exactly 15 multiple choice objects appropriate for GCSE students. Each must have:
+           "text", "A", "B", "C", "D", 
+           "answer" (the exact full text string of the correct choice, matching either option A, B, C, or D perfectly), 
+           "explanation" (a clear, curriculum-aligned scientific explanation of why the answer is factually correct, focusing on core concepts taught at the 14-15 year old level), 
+           "points" (default 1).
+        3. "long_answer": Exactly 1 object representing a classic GCSE 6-mark extended-response question. It must have:
+           "text" (A 6-mark question appropriate for a 14-15 year old GCSE student, focusing on key physical, chemical, or biological processes found in the transcript. Use prompt command terms like 'Explain', 'Describe', 'Evaluate', or 'Compare'),
+           "rubric" (A level-of-response grading rubric mimicking standard GCSE mark schemes. Structure it clearly into:
+               - Level 1 (1-2 marks): Simple statements or disjointed points.
+               - Level 2 (3-4 marks): Clear descriptions with some logical scientific linkages.
+               - Level 3 (5-6 marks): Detailed, structured, and logical scientific explanations with complete sequential steps.
+               - Indicative Content: A list of key factual bullet points the student should ideally include.),
+           "points" (default 6).
+
+        Strict JSON structure:
+        {{
+          "title": "...",
+          "questions": [{{ "text": "...", "A": "...", "B": "...", "C": "...", "D": "...", "answer": "exact text of the correct option", "explanation": "clear GCSE-level explanation", "points": 1 }}],
+          "long_answer": {{ "text": "...", "rubric": "...", "points": 6 }}
+        }}
+
         """
         
         with st.spinner("Building schema..."):
