@@ -69,7 +69,7 @@ if st.button("Generate Questions from Transcript", type="primary"):
         
         with st.spinner("Building schema..."):
             try:
-                model = genai.GenerativeModel(model_name='gemini-flash-latest')
+                model = genai.GenerativeModel(model_name='gemma-4-31b-it')
                 response = model.generate_content(prompt)
                 
                 # CLEANING: Strip markdown and whitespace
