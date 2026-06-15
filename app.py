@@ -105,22 +105,22 @@ if st.button("Generate Questions from Transcript", type="primary"):
         with st.spinner("Quiz Architect is building your schema structure..."):
             # Attempt 1: Gemini 3.5 Flash
             try:
-                status_placeholder.info("🚀 Attempting compilation using **Gemini 3.5 Flash**...")
-                model_35 = genai.GenerativeModel(model_name='gemini-3.5-flash', system_instruction=system_instruction)
+                status_placeholder.info("🚀 Attempting compilation using **Gemini 3.1 Flash Lite**...")
+                model_35 = genai.GenerativeModel(model_name='gemini-3.1-flash-lite', system_instruction=system_instruction)
                 response = model_35.generate_content(prompt, generation_config=generation_config)
                 compiled_data = json.loads(response.text)
-                model_used = "Gemini 3.5 Flash"
+                model_used = "Gemini 3.1 Flash Lite"
             
             except Exception as error_35:
-                status_placeholder.warning(f"⚠️ Gemini 3.5 Flash encountered an error: {error_35}. Switching to fallback engine...")
+                status_placeholder.warning(f"⚠️ Gemini 3.5 Flash Lite encountered an error: {error_35}. Switching to fallback engine...")
                 
                 # Attempt 2: Fallback to Gemini 2.5 Flash
                 try:
-                    st.info("🔄 Re-routing payload to backup cluster via **Gemini 2.5 Flash**...")
-                    model_25 = genai.GenerativeModel(model_name='gemini-2.5-flash', system_instruction=system_instruction)
+                    st.info("🔄 Re-routing payload to backup cluster via **Gemini 2.5 Flash Lite**...")
+                    model_25 = genai.GenerativeModel(model_name='gemini-2.5-flash-lite', system_instruction=system_instruction)
                     response = model_25.generate_content(prompt, generation_config=generation_config)
                     compiled_data = json.loads(response.text)
-                    model_used = "Gemini 2.5 Flash"
+                    model_used = "Gemini 2.5 Flash Lite"
                 except Exception as error_25:
                     status_placeholder.error(f"❌ Comprehensive failure: Both 3.5 and Fallback 2.5 chains returned errors. Message: {error_25}")
 
